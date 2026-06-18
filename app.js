@@ -1,145 +1,176 @@
-// 1. Inicialización con tus credenciales exactas [cite: 95-97]
-const supabaseUrl = 'https://nsoazwbxfjffmdqrmlly.supabase.co'; // Sin el /rest/v1/
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zb2F6d2J4ZmpmZm1kcXJtbGx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MDIzMzgsImV4cCI6MjA5NzI3ODMzOH0.7HFQ2uP0zExT7knO51iRPBYQLoQNJOQHPwEKnKpPtEc';
-const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+// 1. INICIALIZAR CONFIGURACIÓN DE SUPABASE
+const supabaseUrl = 'https://nsoazwbxfjffmdqrmlly.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zb2F6d2J4ZmpmZm1kcXJtbGx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MDIzMzgsImV4cCI6MjA5NzI3ODMzOH0.7HFQ2uP0zExT7knO51iRPBYQLoQNJOQHPwEKnKpPtEc'; 
 
-// 2. Ejecutar al cargar la página [cite: 99]
-document.addEventListener('DOMContentLoaded', async () => {
-    await cargarSelectsDinamicos();
-    await cargarMascotas('todas'); // Cargar listado inicial
+// ¡AQUÍ ESTÁ LA MAGIA! Cambiamos el nombre a "clienteSupabase" para evitar el choque
+const clienteSupabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+// 2. CAPTURA DE ELEMENTOS DEL DOM
+const formMascota = document.getElementById('formMascota');
+const tablaMascotas = document.getElementById('tablaMascotas');
+const mensajeDiv = document.getElementById('mensaje');
+const filtroEspecie = document.getElementById('filtroEspecie');
+
+// 3. EVENTO INICIAL DE CARGA
+document.addEventListener('DOMContentLoaded', () => {
+    cargarSelectsDinamicos();
+    cargarTablaMascotas();
 });
 
-// 3. Llenar los menús desplegables (GET a Catálogos) [cite: 104]
+// 4. FUNCIÓN PARA LLENAR TODOS LOS MENÚS DESPLEGABLES DESDE LA BD
 async function cargarSelectsDinamicos() {
-    const catalogos = [
-        { tabla: 'especies', selectId: 'especie_id', esFiltro: true },
-        { tabla: 'razas', selectId: 'raza_id', esFiltro: false },
-        { tabla: 'tipos_atencion', selectId: 'tipo_atencion_id', esFiltro: false },
-        { tabla: 'condiciones_medicas', selectId: 'condicion_medica_id', esFiltro: false }
-    ];
+    try {
+        // a) Cargar Especies
+        const { data: especies, error: errEsp } = await clienteSupabase.from('especies').select('*').order('id', { ascending: true });
+        if (errEsp) throw errEsp;
+        const selectEspecie = document.getElementById('especie_id');
+        especies.forEach(esp => {
+            selectEspecie.innerHTML += `<option value="${esp.id}">${esp.nombre}</option>`;
+            filtroEspecie.innerHTML += `<option value="${esp.id}">${esp.nombre}</option>`;
+        });
 
-    for (let cat of catalogos) {
-        let { data, error } = await supabase.from(cat.tabla).select('id, nombre');
-        if (!error && data) {
-            const selectElement = document.getElementById(cat.selectId);
-            data.forEach(item => {
-                let opt = document.createElement('option');
-                opt.value = item.id;
-                opt.textContent = item.nombre;
-                selectElement.appendChild(opt);
-            });
+        // b) Cargar Razas
+        const { data: razas, error: errRaz } = await clienteSupabase.from('razas').select('*').order('id', { ascending: true });
+        if (errRaz) throw errRaz;
+        const selectRaza = document.getElementById('raza_id');
+        razas.forEach(raz => {
+            selectRaza.innerHTML += `<option value="${raz.id}">${raz.nombre}</option>`;
+        });
 
-            // Si es la tabla especies, llenamos también el filtro del listado
-            if (cat.esFiltro) {
-                const filtroEspecie = document.getElementById('filtroEspecie');
-                data.forEach(item => {
-                    let optFiltro = document.createElement('option');
-                    optFiltro.value = item.id;
-                    optFiltro.textContent = item.nombre;
-                    filtroEspecie.appendChild(optFiltro);
-                });
-            }
-        }
+        // c) Cargar Tipos de Atención
+        const { data: tiposAtencion, error: errAtn } = await clienteSupabase.from('tipos_atencion').select('*').order('id', { ascending: true });
+        if (errAtn) throw errAtn;
+        const selectAtencion = document.getElementById('tipo_atencion_id');
+        tiposAtencion.forEach(tipo => {
+            selectAtencion.innerHTML += `<option value="${tipo.id}">${tipo.nombre}</option>`;
+        });
+
+        // d) Cargar Condiciones Médicas
+        const { data: condiciones, error: errCond } = await clienteSupabase.from('condiciones_medicas').select('*').order('id', { ascending: true });
+        if (errCond) throw errCond;
+        const selectCondicion = document.getElementById('condicion_medica_id');
+        condiciones.forEach(cond => {
+            selectCondicion.innerHTML += `<option value="${cond.id}">${cond.nombre}</option>`;
+        });
+
+    } catch (error) {
+        console.error("Error al inicializar los catálogos:", error);
     }
 }
 
-// 4. Registro de Datos (POST a tabla principal) [cite: 108]
-document.getElementById('formMascota').addEventListener('submit', async (e) => {
+// 5. FUNCIÓN PARA REGISTRAR UN NUEVO PACIENTE (INSERT)
+formMascota.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const btn = e.target.querySelector('button');
-    btn.disabled = true;
 
-    // Recolectar datos
     const nuevaMascota = {
+        nombre_mascota: document.getElementById('nombre_mascota').value,
+        edad: parseInt(document.getElementById('edad').value),
+        peso: parseFloat(document.getElementById('peso').value),
         nombre_dueno: document.getElementById('nombre_dueno').value,
         apellido_dueno: document.getElementById('apellido_dueno').value,
         dni_dueno: document.getElementById('dni_dueno').value,
         celular: document.getElementById('celular').value,
-        correo: document.getElementById('correo').value,
-        nombre_mascota: document.getElementById('nombre_mascota').value,
-        edad: parseInt(document.getElementById('edad').value),
-        peso: parseFloat(document.getElementById('peso').value),
+        correo: document.getElementById('correo').value || null,
         especie_id: parseInt(document.getElementById('especie_id').value),
         raza_id: parseInt(document.getElementById('raza_id').value),
         tipo_atencion_id: parseInt(document.getElementById('tipo_atencion_id').value),
         condicion_medica_id: parseInt(document.getElementById('condicion_medica_id').value),
-        observaciones: document.getElementById('observaciones').value
+        observaciones: document.getElementById('observaciones').value || null
     };
 
-    // Inserción en Supabase
-    const { error } = await supabase.from('mascotas').insert([nuevaMascota]);
+    try {
+        const { data, error } = await clienteSupabase.from('mascotas').insert([nuevaMascota]);
+        if (error) throw error;
 
-    const msj = document.getElementById('mensaje');
-    msj.style.display = 'block';
+        mostrarMensaje("¡Paciente registrado exitosamente en la nube!", "#28a745");
+        formMascota.reset();
+        cargarTablaMascotas(); 
 
-    if (error) {
-        msj.style.color = 'red';
-        msj.textContent = 'Error al registrar: ' + error.message; [cite: 123]
-    } else {
-        msj.style.color = 'green';
-        msj.textContent = 'Mascota registrada correctamente.'; [cite: 121]
-        document.getElementById('formMascota').reset();
-        await cargarMascotas(document.getElementById('filtroEspecie').value); // Recargar tabla
+    } catch (error) {
+        console.error("Error en la inserción:", error);
+        mostrarMensaje("Error al registrar: " + error.message, "red");
     }
-    btn.disabled = false;
 });
 
-// 5. Cargar Listado con Cruce de Tablas (Joins)
-async function cargarMascotas(especieFiltro) {
-    const tbody = document.getElementById('tablaMascotas');
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;">Cargando registros...</td></tr>';
+// 6. FUNCIÓN PARA LEER Y MOSTRAR LOS REGISTROS
+async function cargarTablaMascotas() {
+    try {
+        const { data: mascotas, error } = await clienteSupabase
+            .from('mascotas')
+            .select(`
+                *,
+                especies (nombre),
+                razas (nombre),
+                tipos_atencion (nombre),
+                condiciones_medicas (nombre)
+            `)
+            .order('created_at', { ascending: false });
 
-    // Construimos la consulta pidiendo los nombres de los catálogos en lugar de los IDs
-    let query = supabase
-        .from('mascotas')
-        .select(`
-            *,
-            especies (nombre),
-            razas (nombre),
-            tipos_atencion (nombre),
-            condiciones_medicas (nombre)
-        `)
-        .order('created_at', { ascending: false });
+        if (error) throw error;
+        renderizarTabla(mascotas);
 
-    // Aplicar filtro si no es "todas"
-    if (especieFiltro !== 'todas') {
-        query = query.eq('especie_id', parseInt(especieFiltro));
+    } catch (error) {
+        console.error("Error al construir el listado:", error);
     }
+}
 
-    const { data, error } = await query;
+// 7. FILTRADO DINÁMICO POR ESPECIE
+filtroEspecie.addEventListener('change', async () => {
+    const seleccion = filtroEspecie.value;
+    try {
+        let consulta = clienteSupabase
+            .from('mascotas')
+            .select(`
+                *,
+                especies (nombre),
+                razas (nombre),
+                tipos_atencion (nombre),
+                condiciones_medicas (nombre)
+            `)
+            .order('created_at', { ascending: false });
 
-    tbody.innerHTML = ''; // Limpiar cargando
+        if (seleccion !== 'todas') {
+            consulta = consulta.eq('especie_id', parseInt(seleccion));
+        }
 
-    if (error) {
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:red;">Error cargando datos</td></tr>';
-        return;
+        const { data: mascotas, error } = await consulta;
+        if (error) throw error;
+        renderizarTabla(mascotas);
+
+    } catch (error) {
+        console.error("Error al aplicar el filtro:", error);
     }
+});
 
-    if (data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;">No hay mascotas registradas.</td></tr>';
-        return;
-    }
+// 8. FUNCIONES AUXILIARES DE INTERFAZ
+function renderizarTabla(listaMascotas) {
+    tablaMascotas.innerHTML = ''; 
 
-    // Dibujar las filas en el HTML
-    data.forEach(mascota => {
+    listaMascotas.forEach(m => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td><strong>${mascota.nombre_mascota}</strong></td>
-            <td>${mascota.edad}</td>
-            <td>${mascota.peso} kg</td>
-            <td>${mascota.especies?.nombre || 'N/A'}</td>
-            <td>${mascota.razas?.nombre || 'N/A'}</td>
-            <td>${mascota.nombre_dueno} ${mascota.apellido_dueno}</td>
-            <td>${mascota.dni_dueno}</td>
-            <td>${mascota.celular}</td>
-            <td>${mascota.tipos_atencion?.nombre || 'N/A'}</td>
-            <td>${mascota.condiciones_medicas?.nombre || 'N/A'}</td>
+            <td><strong>${m.nombre_mascota}</strong></td>
+            <td>${m.edad} años</td>
+            <td>${m.peso} Kg</td>
+            <td>${m.especies?.nombre || 'No asignado'}</td>
+            <td>${m.razas?.nombre || 'No asignado'}</td>
+            <td>${m.nombre_dueno} ${m.apellido_dueno}</td>
+            <td>${m.dni_dueno}</td>
+            <td>${m.celular || 'N/A'}</td>
+            <td>${m.tipos_atencion?.nombre || 'N/A'}</td>
+            <td>${m.condiciones_medicas?.nombre || 'Ninguna'}</td>
         `;
-        tbody.appendChild(tr);
+        tablaMascotas.appendChild(tr);
     });
 }
 
-// 6. Evento del Filtro
-document.getElementById('filtroEspecie').addEventListener('change', (e) => {
-    cargarMascotas(e.target.value);
-});
+function mostrarMensaje(texto, color) {
+    mensajeDiv.textContent = texto;
+    mensajeDiv.style.backgroundColor = color === '#28a745' ? '#e2f0d9' : '#fce4d6';
+    mensajeDiv.style.color = color;
+    mensajeDiv.style.border = `1px solid ${color}`;
+    mensajeDiv.style.padding = '10px';
+    mensajeDiv.style.borderRadius = '4px';
+    mensajeDiv.style.display = 'block';
+    setTimeout(() => { mensajeDiv.style.display = 'none'; }, 4000);
+}
